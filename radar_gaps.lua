@@ -17,29 +17,37 @@ local luaWidgetsDir = 'LuaUI/Widgets/'
 local LuaShader = VFS.Include(luaWidgetsDir .. "Include/LuaShader.lua")
 VFS.Include(luaWidgetsDir .. 'Include/instancevbotable.lua')
 
-local shader, VBO
+-- Config
+local UPDATE_ALLY_RADAR_POSITION_FRAMES = 10
+local UPDATE_ENEMY_UNIT_POSITION_FRAMES = 30
+local SHOW_RADAR_MARK_FRAMES = 30 * 20;
 
-local updatePositionFrames = 30
-local forgetUnitFrames = 30 * 30;
+local shader, VBO
 
 local function lengthSq(x, y, z)
 	return x * x + y * y + (z and z * z or 0)
 end
 
-local function RemoveElement(table, index)
-	local length = #table
-	table[index] = table[length]
-	table[length] = nil
-end
-
--- unitID: { x, y, z, radius^2 }
+-- unitID: { frameLastPolled, radius^2, x, y, z }
 local allyRadars = {}
 -- unitID: { frameLastPolled, x, y, z, vx, vy, vz }
 local enemyUnits = {}
--- index: { frame, unitID, x, y, z }
-local blackspots = {}
+-- index: deleteOnFrame
+local marks = {}
+local markIndex = 1
 
-local function AddRadar(unitID)
+local function UpdateAllyRadar(unitID, frame, data)
+	data[1] = frame
+	local x, y, z = Spring.GetUnitPosition(unitID)
+	if not x or not y or not z then
+		return false
+	end
+
+	data[3], data[4], data[5] = x, y, z
+	return true
+end
+
+local function AddAllyRadar(unitID)
 	local unitDefID = Spring.GetUnitDefID(unitID)
 	if not unitDefID or not Spring.IsUnitAllied(unitID) then
 		return
@@ -52,53 +60,60 @@ local function AddRadar(unitID)
 	if radarDistance == 0 then
 		return
 	end
-	
-	radarDistance = radarDistance * 0.95 -- 5% margin
-	local x, y, z = Spring.GetUnitPosition(unitID)
 
-	-- FIXME: mobile radars
-	allyRadars[unitID] = { x, y, z, radarDistance * radarDistance }
+	local radarDistanceSq = radarDistance * radarDistance * 0.95 -- 5% margin
+	local data = { 0, radarDistanceSq, 0, 0, 0 }
+	if UpdateAllyRadar(unitID, Spring.GetGameFrame(), data) then
+		allyRadars[unitID] = data
+	end
 end
 
+-- return true if the position was updated
 local function UpdateUnit(unitID, frame, data)
-	local x, y, z = Spring.GetUnitPosition(unitID)
-	local vx, vy, vz = Spring.GetUnitVelocity(unitID)
+	data[1] = frame
 	
-	if x and y and z then
-		data = data or {}
-		data[1] = frame
-		data[2], data[3], data[4]  = x, y, z
-		data[5], data[6], data[7]  = vx or 0, vy or 0, vz or 0
+	local x, y, z = Spring.GetUnitPosition(unitID)
+	if not x or not y or not z then
+		return false
 	end
 
-	return data
+	data[2], data[3], data[4]  = x, y, z
+	local vx, vy, vz = Spring.GetUnitVelocity(unitID)
+	data[5], data[6], data[7]  = vx or 0, vy or 0, vz or 0
+
+	return true
 end
 
-local function TrackUnit(unitID)
+local function TrackEnemyUnit(unitID)
 	if Spring.IsUnitAllied(unitID) then
 		return
 	end
 
-	local data = UpdateUnit(unitID, Spring.GetGameFrame(), nil)
-	enemyUnits[unitID] = data
+	local data = {}
+	if UpdateUnit(unitID, Spring.GetGameFrame(), data) then
+		enemyUnits[unitID] = data
+	end
 end
 
 local function UpdatePositions(frame)
+	-- for unitID, data in pairs(allyRadars) do
+	-- 	if frame - data[1] >= UPDATE_ALLY_RADAR_POSITION_FRAMES then
+	-- 		UpdateAllyRadar(unitID, frame, data)
+	-- 	end
+	-- end
 	for unitID, data in pairs(enemyUnits) do
-		if frame - data[1] >= updatePositionFrames then
+		if frame - data[1] >= UPDATE_ENEMY_UNIT_POSITION_FRAMES then
 			UpdateUnit(unitID, frame, data)
-			if frame - data[1] >= forgetUnitFrames then
-				enemyUnits[unitID] = nil
-			end
 		end
 	end
 end
 
 local function InRadarRange(x, y, z)
 	for _, radar in pairs(allyRadars) do
-		-- FIXME: Cylindrical not spherical
-		local dx, dy, dz = radar[1] - x, radar[2] - y, radar[3] - z
-		if lengthSq(dx, dy, dz) < radar[4] then
+		local lengthSq = lengthSq(radar[3] - x, radar[4] - y)
+		Spring.Echo('InRadarRange', lengthSq, radar[2])
+		if lengthSq < radar[2] then
+			Spring.Echo('in range')
 			return true
 		end
 	end
@@ -110,11 +125,6 @@ end
 ----------------------------------------------------------------
 
 function widget:DrawWorld()
-	-- for _, blackspot in pairs(blackspots) do
-	-- 	local _, _, x, y, z = unpack(blackspot)
-	-- 	gl.DrawGroundCircle(x, y, z, 50, 16)
-	-- end
-
 	gl.DepthTest(false)
 	shader:Activate()
 	VBO.VAO:DrawArrays(GL_POINTS, VBO.usedElements)
@@ -173,8 +183,8 @@ function widget:Initialize()
 
 	-- Bootstrap all units
 	for _, unitID in ipairs(Spring.GetAllUnits()) do
-		AddRadar(unitID)
-		TrackUnit(unitID)
+		AddAllyRadar(unitID)
+		TrackEnemyUnit(unitID)
 	end
 end
 
@@ -182,21 +192,16 @@ function widget:Shutdown()
 end
 
 function widget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
-	AddRadar(unitID)
+	AddAllyRadar(unitID)
 end
 
 function widget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
 	allyRadars[unitID] = nil
 	enemyUnits[unitID] = nil
-	for index, value in ipairs(blackspots) do
-		if value[2] == unitID then
-			blackspots[index] = nil
-		end
-	end
 end
 
 function widget:UnitEnteredRadar(unitID, unitTeam, allyTeam, unitDefID)
-	TrackUnit(unitID)
+	TrackEnemyUnit(unitID)
 end
 
 function widget:UnitLeftRadar(unitID, unitTeam, allyTeam, unitDefID)
@@ -214,17 +219,10 @@ function widget:UnitLeftRadar(unitID, unitTeam, allyTeam, unitDefID)
 		return
 	end
 
-	local key = #blackspots + 1
-	blackspots[key] = {
-		frame,
-		unitID,
-		x + vx * secondsSinceLastPolled,
-		y + vy * secondsSinceLastPolled,
-		z + vz * secondsSinceLastPolled
-	}
-
-	-- FIXME: Key (when removing)
-	Spring.Echo('Blackspot at ' .. x .. ', ' .. y .. ', ' .. z)
+	Spring.Echo('Disappeared at ' .. x .. ', ' .. y .. ', ' .. z)
+	local key = markIndex
+	markIndex = markIndex + 1
+	marks[key] = frame + SHOW_RADAR_MARK_FRAMES
 	pushElementInstance(
 		VBO,
 		{
@@ -233,5 +231,4 @@ function widget:UnitLeftRadar(unitID, unitTeam, allyTeam, unitDefID)
 		},
 		key
 	)
-	-- TODO: Add to table to tidy vbos
 end
