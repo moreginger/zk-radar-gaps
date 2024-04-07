@@ -4,12 +4,12 @@
 
 #line 30000
 in DataGS {
-	uint g_frame;
+	vec4 g_color;
 };
 
 out vec4 fragColor;
 
 void main(void)
 {
-	fragColor.rgba = vec4(1.0, 0.0, 0.0, 0.3);
+	fragColor.rgba = g_color;
 }

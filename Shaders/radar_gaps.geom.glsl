@@ -18,8 +18,7 @@ in DataVS {
 } dataIn[];
 
 out DataGS {
-    // Not required?
-    uint g_frame;
+    vec4 g_color;
 };
 
 mat3 rotY;
@@ -42,13 +41,11 @@ void main() {
     // rotY = 0;
 
     uint frame = dataIn[0].v_frame;
-    g_frame = frame;
-    // float framesToShow = 30.0 * 10.0;
-
-	// float currentFrame = timeInfo.x + timeInfo.w;
-	// float radius = 20.0 * (float(frame) + framesToShow - currentFrame) / framesToShow;
-
-    float radius = 120.0;
+	float currentFrame = timeInfo.x + timeInfo.w;
+    float framesToShow = 30.0 * 30.0;
+    float showFraction = (currentFrame - frame) / framesToShow;
+	float radius = 80.0 + 80.0 * showFraction;
+    g_color = vec4(0.0, 0.0, 1.0, 0.25 * (1.0 - showFraction));
 	
     uint numVertices = 64u;
     float internalAngle = float(numVertices - 2u) * radians(180.0) / float(numVertices);

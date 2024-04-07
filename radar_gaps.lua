@@ -20,7 +20,7 @@ VFS.Include(luaWidgetsDir .. 'Include/instancevbotable.lua')
 -- Config
 local UPDATE_ALLY_RADAR_POSITION_FRAMES = 10
 local UPDATE_ENEMY_UNIT_POSITION_FRAMES = 30
-local SHOW_RADAR_MARK_FRAMES = 30 * 20;
+local SHOW_RADAR_MARK_FRAMES = 30 * 30;
 
 local shader, VBO
 
@@ -108,12 +108,19 @@ local function UpdatePositions(frame)
 	end
 end
 
+local function RemoveOldMarks(frame)
+	for index, deleteOnFrame in pairs(marks) do
+		if frame >= deleteOnFrame then
+			marks[index] = nil
+			popElementInstance(VBO, index)
+		end
+	end
+end
+
 local function InRadarRange(x, y, z)
 	for _, radar in pairs(allyRadars) do
-		local lengthSq = lengthSq(radar[3] - x, radar[4] - y)
-		Spring.Echo('InRadarRange', lengthSq, radar[2])
+		local lengthSq = lengthSq(radar[3] - x, radar[5] - z)
 		if lengthSq < radar[2] then
-			Spring.Echo('in range')
 			return true
 		end
 	end
@@ -124,16 +131,15 @@ end
 --callins
 ----------------------------------------------------------------
 
-function widget:DrawWorld()
-	gl.DepthTest(false)
+function widget:DrawWorldPreUnit()
 	shader:Activate()
 	VBO.VAO:DrawArrays(GL_POINTS, VBO.usedElements)
 	shader:Deactivate()
-	gl.DepthTest(true)
 end
 
 function widget:GameFrame(frame)
 	UpdatePositions(frame)
+	RemoveOldMarks(frame)
 end
 
 local function InitGl()
