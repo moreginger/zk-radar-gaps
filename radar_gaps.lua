@@ -96,11 +96,11 @@ local function TrackEnemyUnit(unitID)
 end
 
 local function UpdatePositions(frame)
-	-- for unitID, data in pairs(allyRadars) do
-	-- 	if frame - data[1] >= UPDATE_ALLY_RADAR_POSITION_FRAMES then
-	-- 		UpdateAllyRadar(unitID, frame, data)
-	-- 	end
-	-- end
+	for unitID, data in pairs(allyRadars) do
+		if frame - data[1] >= UPDATE_ALLY_RADAR_POSITION_FRAMES then
+			UpdateAllyRadar(unitID, frame, data)
+		end
+	end
 	for unitID, data in pairs(enemyUnits) do
 		if frame - data[1] >= UPDATE_ENEMY_UNIT_POSITION_FRAMES then
 			UpdateUnit(unitID, frame, data)
@@ -198,6 +198,7 @@ end
 function widget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
 	allyRadars[unitID] = nil
 	enemyUnits[unitID] = nil
+	marks[unitID] = nil
 end
 
 function widget:UnitEnteredRadar(unitID, unitTeam, allyTeam, unitDefID)
@@ -210,6 +211,8 @@ function widget:UnitLeftRadar(unitID, unitTeam, allyTeam, unitDefID)
 		return
 	end
 
+	enemyUnits[unitID] = nil
+
 	local frame = Spring.GetGameFrame()
 	local frameLastPolled, x, y, z, vx, vy, vz = unpack(data)
 	local secondsSinceLastPolled = (frame - frameLastPolled) / 30
@@ -219,7 +222,6 @@ function widget:UnitLeftRadar(unitID, unitTeam, allyTeam, unitDefID)
 		return
 	end
 
-	Spring.Echo('Disappeared at ' .. x .. ', ' .. y .. ', ' .. z)
 	local key = markIndex
 	markIndex = markIndex + 1
 	marks[key] = frame + SHOW_RADAR_MARK_FRAMES
