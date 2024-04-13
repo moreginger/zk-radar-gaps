@@ -14,15 +14,13 @@ layout (location = 1) in uint frame;
 #line 10000
 
 out DataVS {
-    vec4 v_pos;
-    uint v_frame;
+	vec4 v_pos;
+	uint v_frame;
 };
 
 void main()
 {
-    v_pos = pos;
-    v_frame = frame;
-    // Makes something appear top middle high
-    // gl_Position = cameraViewProj * vec4(100, 100, 100, 1.0);
-    gl_Position = cameraViewProj * vec4(1000.0, 1000.0, 10.0, 1.0);
+	v_pos = pos;
+	v_frame = frame;
+	gl_Position = cameraViewProj * vec4(1000.0, 1000.0, 10.0, 1.0);
 }

@@ -133,6 +133,9 @@ end
 
 function widget:DrawWorldPreUnit()
 	shader:Activate()
+	local texture = "bitmaps/GPL/Lups/perlin_noise.jpg"
+	gl.Texture(0, texture)
+	-- shader:SetUniform("tex0", 0)
 	VBO.VAO:DrawArrays(GL_POINTS, VBO.usedElements)
 	shader:Deactivate()
 end
@@ -153,7 +156,9 @@ local function InitGl()
 		shaderConfig = {},
 		shaderName = glname,
 		uniformFloat = {},
-		uniformInt = {},
+		uniformInt = {
+			NoiseTexture = 0
+		},
 	}
 	shader = LuaShader.CheckShaderUpdates(shaderSourceCache)
 
@@ -192,6 +197,24 @@ function widget:Initialize()
 		AddAllyRadar(unitID)
 		TrackEnemyUnit(unitID)
 	end
+
+	local frame = Spring.GetGameFrame()
+	-- pushElementInstance(
+	-- 	VBO,
+	-- 	{
+	-- 		-100, 200, 2000, 1.0, -- pos
+	-- 		frame -- frame
+	-- 	},
+	-- 	1
+	-- )
+	-- pushElementInstance(
+	-- 	VBO,
+	-- 	{
+	-- 		-100, 200, 2100, 1.0, -- pos
+	-- 		frame -- frame
+	-- 	},
+	-- 	2
+	-- )
 end
 
 function widget:Shutdown()
